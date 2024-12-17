@@ -32,8 +32,6 @@ def extract_features(data):
 def get_features(data):
     result = []
 
-    #audio, sr = librosa.load(io.BytesIO(data), sr=16000)
-
     res3 = extract_features(data)
 
     result.append(res3)

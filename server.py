@@ -1,50 +1,98 @@
 from flask import Flask, request, jsonify
-import numpy as np
-import tensorflow as tf
-from keras.models import load_model
+import os
+import wave
+import librosa
+import librosa.display
+import soundfile
+import pandas as pd
+import matplotlib.pyplot as plt
+from pathlib import Path
 from features_extraction import get_features
-from preprocess_audio import normalize
+from keras.models import load_model
+import numpy as np
+
 
 app = Flask(__name__)
 
-# Carregar o modelo treinado
-model = tf.keras.models.load_model("C:/Users/eduarda.almeida/Downloads/Speech_Emotion_Recognition/modelo_emocoes.h5")
+# Pasta para armazenar os fragmentos temporários
+TEMP_FOLDER = "temp_audio/"
+FINAL_AUDIO = "final_audio.wav"
 
-@app.route('/', methods=['POST'])
+if not os.path.exists(TEMP_FOLDER):
+    os.makedirs(TEMP_FOLDER)
 
-def process_audio():
-    # Recebe os dados de áudio enviados pelo ESP32
-    if not request.data:  # Verifica se há dados no corpo da requisição
-        return jsonify({"error": "Arquivo de áudio não encontrado"}), 400
+fragment_count = 0  # Contador de fragmentos
 
-    #audio_data = request.data
-    audio_data = np.frombuffer(request.data, dtype=np.int16)
-    
-    audio = normalize(audio_data)
-    audio = np.array(audio)
+classes = ["Alegria", "Desgosto", "Medo", "Neutro", "Raiva", "Surpresa", "Tristeza"]
 
-    return f"Tamanho dos dados de áudio recebidos: {audio}"
+model = load_model("C:/Users/eduarda.almeida/Desktop/Servidor_Flask_Modelo/modelo_emocoes.h5") 
 
-    for i in range(len(audio)):
-        features = get_features(audio[i])
+@app.route("/upload", methods=["POST"])
+def upload_audio():
+    global fragment_count
 
-    # Verificar o formato do áudio recebido
-    #return f"Tamanho dos dados de áudio recebidos: {audio_data.shape}"
-    return f"Tamanho dos dados de áudio recebidos: {features}"
+    # Verifica se a solicitação contém JSON com a flag de término
+    if request.is_json:
+        data = request.get_json()
+        if data.get("end"):
+            print("Flag de término detectada. Compilando o arquivo final...")
 
-    # Processa o áudio para o formato de entrada do modelo
-    audio_data = audio_data.reshape(1, -1, 1)
+            # Compilação do áudio final
+            with wave.open(FINAL_AUDIO, "wb") as output_wave:
+                output_wave.setnchannels(1)
+                output_wave.setsampwidth(2)
+                output_wave.setframerate(16000)
 
-    # Realiza a inferência
-    predictions = model.predict(audio_data)
-    emotion_index = np.argmax(predictions)
-    confidence = predictions[0][emotion_index]
+                for i in range(fragment_count):
+                    fragment_path = os.path.join(TEMP_FOLDER, f"fragment_{i}.wav")
+                    if os.path.exists(fragment_path):
+                        with open(fragment_path, "rb") as frag_file:
+                            output_wave.writeframes(frag_file.read())
+                        os.remove(fragment_path)  # Remove fragmento compilado
 
-    return jsonify({
-        "emotion_index": int(emotion_index),
-        "confidence": float(confidence)
-    })
+            print(f"Áudio final salvo como '{FINAL_AUDIO}'")
+            fragment_count = 0  # Reinicia contador
 
-if __name__ == '__main__':
-    # Roda o servidor no seu computador
-    app.run(host='192.168.0.83', port=5000)
+            audio_arrays = []
+
+            x, sr = librosa.load("C:/Users/eduarda.almeida/Desktop/Servidor_Flask_Modelo/final_audio.wav", sr=44100)
+            audio_arrays.append(x)
+
+            #audio_arrays= np.ndarray([audio_arrays])
+
+            #print(model.input_shape)
+
+            X = []
+
+            feature=get_features(x);
+            for j in feature:
+                X.append(j)
+            print(X)
+
+            X_array = np.array(X)
+            X_reshape = np.expand_dims(X_array,axis=2)
+
+            print(X_reshape.shape)
+
+            predictions = model.predict(X_reshape)
+            predicted_class = np.argmax(predictions, axis=1)[0]
+            predicted_class_name = classes[predicted_class]
+
+            print(f"Predição: Classe {predicted_class_name}")
+
+            return jsonify({"status": "success", "message": "Áudio compilado", "class": f"{predicted_class_name}"})
+
+    # Caso seja um fragmento de áudio comum
+    file_path = os.path.join(TEMP_FOLDER, f"fragment_{fragment_count}.wav")
+    with open(file_path, "wb") as f:
+        f.write(request.data)
+    fragment_count += 1
+
+    print(f"Fragmento {fragment_count} recebido e salvo.")
+
+    #print(audio_arrays)
+
+    return jsonify({"status": "success", "message": "Fragmento recebido"}), 200
+
+if __name__ == "__main__":
+    app.run(host="192.168.182.94", port=5000, debug=True)

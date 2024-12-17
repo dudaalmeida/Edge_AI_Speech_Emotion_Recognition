@@ -1,179 +1,141 @@
+#include <driver/i2s.h>
 #include <WiFi.h>
 #include <HTTPClient.h>
-#include <driver/i2s.h>
-
-const char* ssid = "NET_2GE9DC82";
-const char* password = "DDE9DC82";
-const char* serverURL = "http://192.168.0.83:5000/";  // URL do seu servidor Flask
-
-WiFiClient client;
 
 #define I2S_SD 25
 #define I2S_WS 26
 #define I2S_SCK 33
 #define I2S_PORT I2S_NUM_0
+#define I2S_SAMPLE_RATE (16000)
+#define I2S_SAMPLE_BITS (16)
+#define I2S_READ_LEN (16 * 1024)
+#define RECORD_TIME (20) // Segundos
+#define I2S_CHANNEL_NUM (1)
+#define SEND_BUFFER_SIZE (I2S_READ_LEN)
 
+const char* ssid = "NET_2GE9DC82";
+const char* password = "DDE9DC82";
 
-#define BUFFER_CNT 10
-#define BUFFER_LEN 1024
-#define MAX_BUFFER_SIZE 38000
-//int16_t sBuffer[BUFFER_LEN];
+const char* serverUrl = "http://192.168.182.94:5000/upload";
 
-#define BUTTON_PIN 2  // Pino do botão (alterar conforme necessidade)
-#define DEBOUNCE_DELAY 50  // Tempo de debounce em milissegundos
-#define MAX_RECORD_TIME 2000  // Tempo máximo de gravação (2 segundos)
+HTTPClient http;
 
-volatile bool recording = false;  // Estado de gravação (iniciado ou não)
-unsigned long recordStartTime = 0;  // Tempo de início da gravação
+void setup() {
+  Serial.begin(115200);
+  
+  // Conectar ao Wi-Fi
+  connectWiFi();
 
-int16_t accumulatedBuffer[MAX_BUFFER_SIZE];  // Buffer global para acumular os dados de áudio
-int bufferIndex = 0;  // Índice para armazenar os dados no buffer
+  // Inicializar I2S
+  i2sInit();
 
-void i2s_install() {
-  // Set up I2S Processor configuration
-  const i2s_config_t i2s_config = {
-    .mode = i2s_mode_t(I2S_MODE_MASTER | I2S_MODE_RX),
-    .sample_rate = 44100,
-    //.sample_rate = 16000,
-    .bits_per_sample = i2s_bits_per_sample_t(16),
+  // Criar tarefa de captura e envio de áudio
+  xTaskCreate(i2s_adc_send, "i2s_adc_send", 4096, NULL, 1, NULL);
+}
+
+void loop() {
+  // Não faz nada no loop principal
+}
+
+void connectWiFi() {
+  Serial.println("Conectando ao Wi-Fi...");
+  WiFi.begin(ssid, password);
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(1000);
+    Serial.print(".");
+  }
+  Serial.println("\nWi-Fi conectado!");
+  Serial.print("IP: ");
+  Serial.println(WiFi.localIP());
+}
+
+void i2sInit() {
+  i2s_config_t i2s_config = {
+    .mode = (i2s_mode_t)(I2S_MODE_MASTER | I2S_MODE_RX),
+    .sample_rate = I2S_SAMPLE_RATE,
+    .bits_per_sample = i2s_bits_per_sample_t(I2S_BITS_PER_SAMPLE_16BIT),
     .channel_format = I2S_CHANNEL_FMT_ONLY_LEFT,
-    .communication_format = i2s_comm_format_t(I2S_COMM_FORMAT_STAND_I2S),
-    .intr_alloc_flags = 0,
-    .dma_buf_count = BUFFER_CNT,
-    .dma_buf_len = BUFFER_LEN,
+    .communication_format = i2s_comm_format_t(I2S_COMM_FORMAT_I2S | I2S_COMM_FORMAT_I2S_MSB),
+    .intr_alloc_flags = ESP_INTR_FLAG_LEVEL1,
+    .dma_buf_count = 8,
+    .dma_buf_len = 1024,
     .use_apll = false
   };
 
-  i2s_driver_install(I2S_PORT, &i2s_config, 0, NULL);
-}
-
-void i2s_setpin() {
-  // Set I2S pin configuration
-  const i2s_pin_config_t pin_config = {
+  i2s_pin_config_t pin_config = {
     .bck_io_num = I2S_SCK,
     .ws_io_num = I2S_WS,
     .data_out_num = -1,
     .data_in_num = I2S_SD
   };
 
+  i2s_driver_install(I2S_PORT, &i2s_config, 0, NULL);
   i2s_set_pin(I2S_PORT, &pin_config);
+  i2s_set_clk(I2S_PORT, I2S_SAMPLE_RATE, I2S_BITS_PER_SAMPLE_16BIT, I2S_CHANNEL_MONO);
 }
 
-void setup() {
-  Serial.begin(115200);
-  WiFi.begin(ssid, password);
-  while (WiFi.status() != WL_CONNECTED) {
-    delay(500);
-    Serial.print(".");
-  }
-  Serial.println("Connected to WiFi");
+void i2s_adc_send(void *arg) {
+  size_t bytes_read;
+  char* i2s_read_buff = (char*) malloc(I2S_READ_LEN);
+  
+  Serial.println("Iniciando gravação e envio...");
 
-  // Configuração do I2S para capturar os dados de áudio
-  i2s_install();
-  i2s_setpin();
-  i2s_start(I2S_PORT);
+  for (int i = 0; i < RECORD_TIME; i++) { // Loop para RECORD_TIME segundos
+    // Ler dados do microfone I2S
+    i2s_read(I2S_PORT, (void*) i2s_read_buff, I2S_READ_LEN, &bytes_read, portMAX_DELAY);
 
-  pinMode(BUTTON_PIN, INPUT_PULLUP);
+    // Enviar dados via HTTP
+    sendAudioToServer((uint8_t*)i2s_read_buff, bytes_read);
+    Serial.printf("Enviado %u bytes para o servidor\n", bytes_read);
+  }
+  
+  // Envio final com a flag JSON sinalizando o término
+  sendEndFlag();
 
-  if (xTaskCreatePinnedToCore(micTask, "micTask", 10000, NULL, 5, NULL, 1) == pdPASS) {
-    Serial.println("micTask criada com sucesso");
-  }
-    if (xTaskCreatePinnedToCore(buttonTask, "buttonTask", 2048, NULL, 5, NULL, 1) == pdPASS) {
-    Serial.println("buttonTask criada com sucesso");
-  }
+  free(i2s_read_buff);
+  Serial.println("Gravação e envio concluídos.");
+  vTaskDelete(NULL);
 }
 
-void loop(){}
+void sendAudioToServer(uint8_t* data, size_t length) {
+  if (WiFi.status() == WL_CONNECTED) {
 
-void micTask(void* parameter) {
-  size_t bytesIn = 0;
-  int16_t buffer[BUFFER_LEN];
-  while (1) {
-    if (recording) {
-      esp_err_t result = i2s_read(I2S_PORT, &buffer, BUFFER_LEN, &bytesIn, portMAX_DELAY);
-      if (result == ESP_OK) {
-        accumulateAudioData(buffer, bytesIn);
-      }
+    http.begin(serverUrl);
+    http.addHeader("Content-Type", "application/octet-stream");
 
-      // Verifica se o tempo máximo de gravação foi atingido
-      if (millis() - recordStartTime >= MAX_RECORD_TIME) {
-        stopRecording();
-      }
+    int httpResponseCode = http.POST(data, length);
+
+    if (httpResponseCode > 0) {
+      Serial.printf("Resposta do servidor: %d\n", httpResponseCode);
+    } else {
+      Serial.printf("Erro ao enviar: %s\n", http.errorToString(httpResponseCode).c_str());
     }
-    vTaskDelay(10 / portTICK_PERIOD_MS);
+    http.end();
+  } else {
+    Serial.println("Erro: Wi-Fi desconectado!");
   }
 }
 
-void buttonTask(void* parameter) {
-  static unsigned long lastButtonPress = 0;
-  static bool lastButtonState = HIGH;  // Estado anterior do botão
+void sendEndFlag() {
+  if (WiFi.status() == WL_CONNECTED) {
+    HTTPClient http;
 
-  while (1) {
-    bool currentButtonState = digitalRead(BUTTON_PIN);
-    if (lastButtonState == HIGH && currentButtonState == LOW && (millis() - lastButtonPress) > DEBOUNCE_DELAY) {
-      lastButtonPress = millis();
-      if (recording) {
-        stopRecording();
-      } else {
-        startRecording();
-      }
+    Serial.println("Enviando sinalização de término...");
+
+    http.begin(serverUrl);  // URL do servidor
+    http.addHeader("Content-Type", "application/json");
+
+    String jsonPayload = "{\"end\": true}";  // JSON com a flag de término
+    int httpResponseCode = http.POST(jsonPayload);
+
+    if (httpResponseCode > 0) {
+      Serial.printf("Sinalização de término enviada. Resposta: %d\n", httpResponseCode);
+    } else {
+      Serial.printf("Erro ao enviar sinalização de término: %s\n", http.errorToString(httpResponseCode).c_str());
     }
-    lastButtonState = currentButtonState;
-    vTaskDelay(10 / portTICK_PERIOD_MS);  // Verificar o botão a cada 10 ms
-  }
-}
 
-void startRecording() {
-  recording = true;
-  recordStartTime = millis();
-  Serial.println("Iniciando gravação...");
-}
-
-void stopRecording() {
-  recording = false;
-  Serial.println("Gravação interrompida.");
-  sendAudioData();
-  clearBuffer();
-}
-
-// Função para acumular dados de áudio no buffer
-void accumulateAudioData(int16_t* data, size_t size) {
-  // Verifica se há espaço suficiente no buffer para os novos dados
-  if (bufferIndex + size <= MAX_BUFFER_SIZE) {
-    // Copia os dados lidos para o buffer
-    memcpy(&accumulatedBuffer[bufferIndex], data, size * sizeof(int16_t));
-    bufferIndex += size;  // Atualiza o índice para a próxima posição
+    http.end();
   } else {
-    // Se o buffer estiver cheio, envia os dados e reinicia o buffer
-    sendAudioData();
-    clearBuffer();
-    // Agora, começa a acumular os novos dados
-    memcpy(&accumulatedBuffer[0], data, size * sizeof(int16_t));
-    bufferIndex = size;  // Atualiza o índice
+    Serial.println("Erro: Wi-Fi desconectado ao tentar enviar sinalização de término!");
   }
-}
-
-void sendAudioData() {
-  HTTPClient http;
-  http.begin(serverURL);  // URL do servidor Flask
-  http.addHeader("Content-Type", "application/octet-stream");
-
-  // Enviar os dados de áudio acumulados
-  int httpResponseCode = http.POST((uint8_t*)accumulatedBuffer, sizeof(accumulatedBuffer));
-  //Serial.println("Audio: " + accumulatedBuffer[0]);
-
-  if (httpResponseCode > 0) {
-    String payload = http.getString();
-    Serial.println("Server Response: " + payload);
-  } else {
-    Serial.println("Erro ao enviar dados");
-  }
-
-  http.end();  // Fecha a requisição
-}
-
-// Função para limpar o buffer após o envio
-void clearBuffer() {
-  memset(accumulatedBuffer, 0, sizeof(accumulatedBuffer));  // Limpa o buffer após o envio
-  bufferIndex = 0;  // Reinicia o índice
 }
