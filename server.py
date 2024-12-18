@@ -75,6 +75,9 @@ def upload_audio():
             print(X_reshape.shape)
 
             predictions = model.predict(X_reshape)
+
+            print(predictions)
+
             predicted_class = np.argmax(predictions, axis=1)[0]
             predicted_class_name = classes[predicted_class]
 
@@ -95,4 +98,4 @@ def upload_audio():
     return jsonify({"status": "success", "message": "Fragmento recebido"}), 200
 
 if __name__ == "__main__":
-    app.run(host="192.168.182.94", port=5000, debug=True)
+    app.run(host="0.0.0.0", port=5000, debug=True)

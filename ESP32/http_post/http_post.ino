@@ -9,14 +9,15 @@
 #define I2S_SAMPLE_RATE (16000)
 #define I2S_SAMPLE_BITS (16)
 #define I2S_READ_LEN (16 * 1024)
-#define RECORD_TIME (20) // Segundos
+#define RECORD_TIME (8) // Segundos
 #define I2S_CHANNEL_NUM (1)
 #define SEND_BUFFER_SIZE (I2S_READ_LEN)
 
 const char* ssid = "NET_2GE9DC82";
 const char* password = "DDE9DC82";
 
-const char* serverUrl = "http://192.168.182.94:5000/upload";
+//const char* serverUrl = "http://192.168.182.94:5000/upload";
+const char* serverUrl = "http://192.168.0.83:5000/upload";
 
 HTTPClient http;
 
