@@ -10,6 +10,7 @@ from pathlib import Path
 from features_extraction import get_features
 from keras.models import load_model
 import numpy as np
+from preprocess_audio import process_audio
 
 
 app = Flask(__name__)
@@ -17,6 +18,8 @@ app = Flask(__name__)
 # Pasta para armazenar os fragmentos temporários
 TEMP_FOLDER = "temp_audio/"
 FINAL_AUDIO = "final_audio.wav"
+AUDIO_PATH = "C:/Users/eduarda.almeida/Downloads/VERBO-Dataset/VERBO-Dataset/Audios/Mixed/des-m2-l3.wav"
+MODEL_PATH = "C:/Users/eduarda.almeida/Desktop/Servidor_Flask_Modelo/modelo_emocoes_7.h5"
 
 if not os.path.exists(TEMP_FOLDER):
     os.makedirs(TEMP_FOLDER)
@@ -25,8 +28,11 @@ fragment_count = 0  # Contador de fragmentos
 
 classes = ["Alegria", "Desgosto", "Medo", "Neutro", "Raiva", "Surpresa", "Tristeza"]
 
-model = load_model("C:/Users/eduarda.almeida/Desktop/Servidor_Flask_Modelo/modelo_emocoes.h5") 
-
+#model = load_model("C:/Users/eduarda.almeida/Desktop/Servidor_Flask_Modelo/modelo_emocoes.h5") 
+#model = load_model("C:/Users/eduarda.almeida/Desktop/Servidor_Flask_Modelo/modelo_emocoes_norm.h5")
+#model = load_model("C:/Users/eduarda.almeida/Desktop/Servidor_Flask_Modelo/modelo_nao_aguento_mais.h5") 
+model = load_model(MODEL_PATH)
+    
 @app.route("/upload", methods=["POST"])
 def upload_audio():
     global fragment_count
@@ -53,35 +59,15 @@ def upload_audio():
             print(f"Áudio final salvo como '{FINAL_AUDIO}'")
             fragment_count = 0  # Reinicia contador
 
-            audio_arrays = []
+            #processed_audio = process_audio(FINAL_AUDIO)
+            processed_audio = process_audio(AUDIO_PATH)
 
-            x, sr = librosa.load("C:/Users/eduarda.almeida/Desktop/Servidor_Flask_Modelo/final_audio.wav", sr=44100)
-            audio_arrays.append(x)
-
-            #audio_arrays= np.ndarray([audio_arrays])
-
-            #print(model.input_shape)
-
-            X = []
-
-            feature=get_features(x);
-            for j in feature:
-                X.append(j)
-            print(X)
-
-            X_array = np.array(X)
-            X_reshape = np.expand_dims(X_array,axis=2)
-
-            print(X_reshape.shape)
-
-            predictions = model.predict(X_reshape)
-
-            print(predictions)
-
+            predictions = model.predict(processed_audio)
             predicted_class = np.argmax(predictions, axis=1)[0]
             predicted_class_name = classes[predicted_class]
 
-            print(f"Predição: Classe {predicted_class_name}")
+            print(f"Predições: {predictions}")
+            print(f"Classe prevista: {predicted_class_name}")
 
             return jsonify({"status": "success", "message": "Áudio compilado", "class": f"{predicted_class_name}"})
 
