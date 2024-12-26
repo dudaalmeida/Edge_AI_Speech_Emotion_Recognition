@@ -146,11 +146,65 @@ void i2s_adc_send(void *arg) {
 
   display.clearDisplay();
   display.setCursor(0, 0);
-  display.println("Envio concluído!");
+  display.println("Envio concluido!");
   display.display();
+
+  getInferenceFromServer();
 
   free(i2s_read_buff);
   vTaskDelete(NULL);
+}
+
+void ParseJSON(int httpResponseCode, String response){
+  Serial.printf("Código HTTP: %d\n", httpResponseCode);
+  Serial.println("Resposta do servidor:");
+  Serial.println(response);
+  // Parse do JSON
+  StaticJsonDocument<200> doc;
+  DeserializationError error = deserializeJson(doc, response);
+  if (error) {
+    Serial.print("Erro ao analisar JSON: ");
+    Serial.println(error.f_str());
+    display.println("Erro JSON!");
+  } else {
+    // Exibir campos relevantes do JSON
+    const char* status = doc["status"]; // Exemplo de chave "status"
+    const char* message = doc["message"]; // Exemplo de chave "message"
+        
+    display.clearDisplay();
+    display.setCursor(0, 0);
+    display.println("Servidor:");
+    //display.println(status);
+    Serial.printf("Status: %s, Message: %s\n", status, message);
+    display.println(message);
+    display.display();
+  }
+}
+
+void getInferenceFromServer() {
+  if (WiFi.status() == WL_CONNECTED) {
+    String getUrl = "http://192.168.0.83:5000/infer";
+    http.begin(getUrl);
+    int httpResponseCode = http.GET();
+    if (httpResponseCode > 0) {
+      String response = http.getString();
+      Serial.printf("Resposta do servidor (GET): %s\n", response.c_str());
+      
+      ParseJSON(httpResponseCode, response);
+    } else {
+      display.clearDisplay();
+      display.setCursor(0, 0);
+      display.println("Erro no GET!");
+      display.display();
+      Serial.printf("Erro ao realizar GET: %s\n", http.errorToString(httpResponseCode).c_str());
+    }
+    http.end();
+  } else {
+    display.clearDisplay();
+    display.println("Wi-Fi desconectado!");
+    display.display();
+    Serial.println("Erro: Wi-Fi desconectado!");
+  }
 }
 
 void checkButton(void *arg) {
