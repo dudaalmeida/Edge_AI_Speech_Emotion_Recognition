@@ -2,18 +2,32 @@ import librosa
 import numpy as np
 from keras.models import load_model
 from features_extraction import get_features
+import soundfile as sf
+from scipy import signal
+import os
+
+os.environ['TF_ENABLE_ONEDNN_OPTS'] = '0'
+
+import keras
 
 def process_audio(audio_path):
     try:
         # Carregando o áudio
         x, sr = librosa.load(audio_path, sr=16000)  # Certifique-se de usar a taxa de amostragem correta
+        #b, a = signal.butter(5, 3000, 'low', fs=sr)
+        #x_filtered = signal.filtfilt(b, a, x)
+
+        # Salvar o áudio filtrado
+        #sf.write(audio_path, x_filtered, sr)
+
+        x_filtered = x
 
         # Exibir estatísticas do áudio
-        print(f"Amplitude máxima: {np.max(x)}")
-        print(f"Amplitude mínima: {np.min(x)}")
+        print(f"Amplitude máxima: {np.max(x_filtered)}")
+        print(f"Amplitude mínima: {np.min(x_filtered)}")
 
         # Extração de features
-        features = get_features(x)
+        features = get_features(x_filtered)
         features_array = np.array(features)
 
         # Normalização

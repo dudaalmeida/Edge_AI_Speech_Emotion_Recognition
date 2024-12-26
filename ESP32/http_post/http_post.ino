@@ -173,11 +173,13 @@ void ParseJSON(int httpResponseCode, String response){
         
     display.clearDisplay();
     display.setCursor(0, 0);
+    display.setTextSize(2);
     display.println("Servidor:");
     //display.println(status);
     Serial.printf("Status: %s, Message: %s\n", status, message);
     display.println(message);
     display.display();
+    display.setTextSize(1);
   }
 }
 

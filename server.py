@@ -73,18 +73,6 @@ def upload_audio():
             print(f"Áudio final salvo como '{FINAL_AUDIO}'")
             fragment_count = 0 
 
-            processed_audio = process_audio(FINAL_AUDIO)
-            #processed_audio = process_audio(AUDIO_PATH)
-
-            predictions = model.predict(processed_audio)
-            predicted_class = np.argmax(predictions, axis=1)[0]
-            predicted_class_name = classes[predicted_class]
-
-            print(f"Predições: {predictions}")
-            print(f"Classe prevista: {predicted_class_name}")
-
-            return jsonify({"status": "success", "message": f"{predicted_class_name}"}), 200
-
     # Caso seja um fragmento de áudio comum
     file_path = os.path.join(TEMP_FOLDER, f"fragment_{fragment_count}.wav")
     with open(file_path, "wb") as f:
