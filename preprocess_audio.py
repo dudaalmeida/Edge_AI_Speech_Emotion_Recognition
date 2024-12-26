@@ -23,9 +23,9 @@ def process_audio(audio_path):
         features_array_reshaped = np.expand_dims(features_array, axis=2)
 
         # Exibir informações de depuração
-        print(f"Features antes da normalização: {features}")
-        print(f"Features após a normalização: {features_array_normalized}")
-        print(f"Shape após expansão de dimensão: {features_array_reshaped.shape}")
+        #print(f"Features antes da normalização: {features}")
+        #print(f"Features após a normalização: {features_array_normalized}")
+        #print(f"Shape após expansão de dimensão: {features_array_reshaped.shape}")
 
         return features_array_reshaped
     except Exception as e:

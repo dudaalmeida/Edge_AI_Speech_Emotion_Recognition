@@ -19,7 +19,7 @@ app = Flask(__name__)
 TEMP_FOLDER = "temp_audio/"
 FINAL_AUDIO = "final_audio.wav"
 AUDIO_PATH = "C:/Users/eduarda.almeida/Downloads/VERBO-Dataset/VERBO-Dataset/Audios/Mixed/des-m2-l3.wav"
-MODEL_PATH = "C:/Users/eduarda.almeida/Desktop/Servidor_Flask_Modelo/modelo_emocoes_7.h5"
+MODEL_PATH = "C:/Users/eduarda.almeida/Desktop/Servidor_Flask_Modelo/model_34.h5"
 
 if not os.path.exists(TEMP_FOLDER):
     os.makedirs(TEMP_FOLDER)
@@ -59,8 +59,8 @@ def upload_audio():
             print(f"Áudio final salvo como '{FINAL_AUDIO}'")
             fragment_count = 0  # Reinicia contador
 
-            #processed_audio = process_audio(FINAL_AUDIO)
-            processed_audio = process_audio(AUDIO_PATH)
+            processed_audio = process_audio(FINAL_AUDIO)
+            #processed_audio = process_audio(AUDIO_PATH)
 
             predictions = model.predict(processed_audio)
             predicted_class = np.argmax(predictions, axis=1)[0]
