@@ -18,36 +18,45 @@
 #define SEND_BUFFER_SIZE (I2S_READ_LEN)
 
 // Definições do Display SSD1306
-#define SCREEN_WIDTH 128 // OLED display width, in pixels
-#define SCREEN_HEIGHT 64 // OLED display height, in pixels
+#define SCREEN_WIDTH 128
+#define SCREEN_HEIGHT 64
 #define OLED_RESET 4
 Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
-#define NUMFLAKES     10 // Number of snowflakes in the animation example
-#define LOGO_HEIGHT   16
-#define LOGO_WIDTH    16
-static const unsigned char PROGMEM logo_bmp[] =
-{0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
-  0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
-};
 
-// Definições de Wi-Fi
+// Definições do botão
+#define BUTTON_PIN 2
+#define DEBOUNCE_DELAY 50 // 50 ms para debouncing
+
+// Variáveis globais
+bool isRecording = false;
+unsigned long lastDebounceTime = 0;
+bool buttonState = LOW;
+bool lastButtonState = LOW;
+
+// Wi-Fi
 const char* ssid = "NET_2GE9DC82";
 const char* password = "DDE9DC82";
 const char* serverUrl = "http://192.168.0.83:5000/upload";
-
 HTTPClient http;
+
+// Prototipação
+void connectWiFi();
+void i2sInit();
+void i2s_adc_send(void *arg);
+void checkButton(void *arg);
+void sendAudioToServer(uint8_t* data, size_t length);
+void sendEndFlag();
 
 void setup() {
   Serial.begin(115200);
 
+  pinMode(BUTTON_PIN, INPUT);
 
   // Inicializar o display
   if (!display.begin(SSD1306_SWITCHCAPVCC, 0x3C)) {
     Serial.println("Erro ao inicializar o display SSD1306.");
     while (true);
   }
-
-  display.display();
 
   display.clearDisplay();
   display.setTextSize(1);
@@ -62,12 +71,12 @@ void setup() {
   // Inicializar I2S
   i2sInit();
 
-  // Criar tarefa de captura e envio de áudio
-  xTaskCreate(i2s_adc_send, "i2s_adc_send", 4096, NULL, 1, NULL);
+  // Criar tarefa para monitorar o botão
+  xTaskCreate(checkButton, "Check Button", 2048, NULL, 1, NULL);
 }
 
 void loop() {
-  // Não faz nada no loop principal
+  // O loop principal fica vazio, as tasks lidam com o comportamento.
 }
 
 void connectWiFi() {
@@ -119,35 +128,6 @@ void i2sInit() {
   i2s_set_clk(I2S_PORT, I2S_SAMPLE_RATE, I2S_BITS_PER_SAMPLE_16BIT, I2S_CHANNEL_MONO);
 }
 
-void getInferenceFromServer() {
-  if (WiFi.status() == WL_CONNECTED) {
-    String getUrl = "http://192.168.0.83:5000/infer";
-
-    http.begin(getUrl);
-    int httpResponseCode = http.GET();
-
-    if (httpResponseCode > 0) {
-      String response = http.getString();
-      Serial.printf("Resposta do servidor (GET): %s\n", response.c_str());
-      
-      ParseJSON(httpResponseCode, response);
-    } else {
-      display.clearDisplay();
-      display.setCursor(0, 0);
-      display.println("Erro no GET!");
-      display.display();
-      Serial.printf("Erro ao realizar GET: %s\n", http.errorToString(httpResponseCode).c_str());
-    }
-
-    http.end();
-  } else {
-    display.clearDisplay();
-    display.println("Wi-Fi desconectado!");
-    display.display();
-    Serial.println("Erro: Wi-Fi desconectado!");
-  }
-}
-
 void i2s_adc_send(void *arg) {
   size_t bytes_read;
   char* i2s_read_buff = (char*)malloc(I2S_READ_LEN);
@@ -157,55 +137,44 @@ void i2s_adc_send(void *arg) {
   display.println("Gravando audio...");
   display.display();
 
-  for (int i = 0; i < RECORD_TIME; i++) {
+  while (isRecording) {
     i2s_read(I2S_PORT, (void*)i2s_read_buff, I2S_READ_LEN, &bytes_read, portMAX_DELAY);
-
     sendAudioToServer((uint8_t*)i2s_read_buff, bytes_read);
-    //display.clearDisplay();
-    //display.setCursor(0, 0);
-    //display.printf("Enviado: %u bytes", bytes_read);
-    //Serial.println("Enviado: %u bytes", bytes_read);
-    //display.display();
   }
 
   sendEndFlag();
 
   display.clearDisplay();
   display.setCursor(0, 0);
-  display.println("Envio concluido!");
-  Serial.println("Envio concluido!");
+  display.println("Envio concluído!");
   display.display();
-
-  getInferenceFromServer();
 
   free(i2s_read_buff);
   vTaskDelete(NULL);
 }
 
-void ParseJSON(int httpResponseCode, String response){
-  Serial.printf("Código HTTP: %d\n", httpResponseCode);
-  Serial.println("Resposta do servidor:");
-  Serial.println(response);
+void checkButton(void *arg) {
+  while (true) {
+    int reading = digitalRead(BUTTON_PIN);
+    if (reading != lastButtonState) {
+      lastDebounceTime = millis();
+    }
 
-  // Parse do JSON
-  StaticJsonDocument<200> doc;
-  DeserializationError error = deserializeJson(doc, response);
-  if (error) {
-    Serial.print("Erro ao analisar JSON: ");
-    Serial.println(error.f_str());
-    display.println("Erro JSON!");
-  } else {
-    // Exibir campos relevantes do JSON
-    const char* status = doc["status"]; // Exemplo de chave "status"
-    const char* message = doc["message"]; // Exemplo de chave "message"
-        
-    display.clearDisplay();
-    display.setCursor(0, 0);
-    display.println("Servidor:");
-    //display.println(status);
-    Serial.printf("Status: %s, Message: %s\n", status, message);
-    display.println(message);
-    display.display();
+    if ((millis() - lastDebounceTime) > DEBOUNCE_DELAY) {
+      if (reading != buttonState) {
+        buttonState = reading;
+
+        if (buttonState == HIGH) {
+          isRecording = !isRecording;
+          if (isRecording) {
+            xTaskCreate(i2s_adc_send, "i2s_adc_send", 4096, NULL, 1, NULL);
+          }
+        }
+      }
+    }
+
+    lastButtonState = reading;
+    vTaskDelay(pdMS_TO_TICKS(10)); // Pequeno delay para evitar saturação da CPU
   }
 }
 
@@ -213,31 +182,12 @@ void sendAudioToServer(uint8_t* data, size_t length) {
   if (WiFi.status() == WL_CONNECTED) {
     http.begin(serverUrl);
     http.addHeader("Content-Type", "application/octet-stream");
-
     int httpResponseCode = http.POST(data, length);
-    String response = http.getString();
+    http.end();
 
-    if (httpResponseCode > 0) {
-      Serial.printf("Código HTTP: %d\n", httpResponseCode);
-      Serial.println("Resposta do servidor:");
-      Serial.println(response);
-      
-      ParseJSON(httpResponseCode, response);
-
-    } else {
-      display.clearDisplay();
-      display.setCursor(0, 0);
-      display.println("Erro ao enviar!");
-      display.display();
+    if (httpResponseCode <= 0) {
       Serial.printf("Erro ao enviar: %s\n", http.errorToString(httpResponseCode).c_str());
     }
-
-    http.end();
-  } else {
-    display.clearDisplay();
-    display.println("Wi-Fi desconectado!");
-    display.display();
-    Serial.println("Erro: Wi-Fi desconectado!");
   }
 }
 
@@ -245,28 +195,8 @@ void sendEndFlag() {
   if (WiFi.status() == WL_CONNECTED) {
     http.begin(serverUrl);
     http.addHeader("Content-Type", "application/json");
-
     String jsonPayload = "{\"end\": true}";
-    int httpResponseCode = http.POST(jsonPayload);
-
-    //display.clearDisplay();
-    //display.setCursor(0, 0);
-
-    if (httpResponseCode > 0) {
-      //display.println("Sinal enviado!");
-      //display.display();
-      Serial.printf("Sinal enviado: %d\n", httpResponseCode);
-    } else {
-      display.println("Erro sinal!");
-      display.display();
-      Serial.printf("Erro ao enviar sinal: %s\n", http.errorToString(httpResponseCode).c_str());
-    }
-
+    http.POST(jsonPayload);
     http.end();
-  } else {
-    display.clearDisplay();
-    display.println("Wi-Fi desconectado!");
-    display.display();
-    Serial.println("Erro: Wi-Fi desconectado!");
   }
 }
