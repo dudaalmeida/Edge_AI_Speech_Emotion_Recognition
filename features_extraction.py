@@ -29,8 +29,18 @@ def extract_features(data):
 
     return result
 
+def remove_silence(data, sr=16000, top_db=20):
+    # Encontrar intervalos com energia acima do limiar
+    intervals = librosa.effects.split(data, top_db=top_db)
+    
+    # Concatenar os intervalos não silenciosos
+    non_silent_data = np.concatenate([data[start:end] for start, end in intervals])
+    return non_silent_data
+
 def get_features(data):
     result = []
+    
+    data = remove_silence(data)
 
     res3 = extract_features(data)
 

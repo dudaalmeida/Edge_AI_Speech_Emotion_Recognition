@@ -18,7 +18,7 @@ app = Flask(__name__)
 # Pasta para armazenar os fragmentos temporários
 TEMP_FOLDER = "temp_audio/"
 FINAL_AUDIO = "final_audio.wav"
-AUDIO_PATH = "C:/Users/eduarda.almeida/Downloads/VERBO-Dataset/VERBO-Dataset/Audios/Mixed/des-m2-l3.wav"
+AUDIO_PATH = "C:/Users/eduarda.almeida/Downloads/VERBO-Dataset/VERBO-Dataset/Audios/Mixed/tri-m4-q1.wav"
 MODEL_PATH = "C:/Users/eduarda.almeida/Desktop/Servidor_Flask_Modelo/model_34.h5"
 
 if not os.path.exists(TEMP_FOLDER):
@@ -35,6 +35,7 @@ def infer():
     try:
         # Realizar a inferência usando o áudio final processado
         processed_audio = process_audio(FINAL_AUDIO)
+        #processed_audio = process_audio(AUDIO_PATH)
         predictions = model.predict(processed_audio)
         predicted_class = np.argmax(predictions, axis=1)[0]
         predicted_class_name = classes[predicted_class]
@@ -50,6 +51,13 @@ def infer():
 @app.route("/upload", methods=["POST"])
 def upload_audio():
     global fragment_count
+
+    # Remove o "fragment_0.wav" para resolver bug no audio
+    if fragment_count == 1:
+        fragment_0_path = os.path.join(TEMP_FOLDER, "fragment_0.wav")
+        if os.path.exists(fragment_0_path):
+            os.remove(fragment_0_path)
+            print("Arquivo 'fragment_0.wav' antigo encontrado e removido.")
 
     # Verifica se a solicitação contém JSON com a flag de término
     if request.is_json:
@@ -81,8 +89,6 @@ def upload_audio():
 
     print(f"Fragmento {fragment_count} recebido e salvo.")
 
-    #print(audio_arrays)
-    
     return jsonify({"status": "success", "message": "Fragmento recebido"}), 200
 
 if __name__ == "__main__":

@@ -14,11 +14,11 @@ def process_audio(audio_path):
     try:
         # Carregando o áudio
         x, sr = librosa.load(audio_path, sr=16000)  # Certifique-se de usar a taxa de amostragem correta
-        #b, a = signal.butter(5, 3000, 'low', fs=sr)
-        #x_filtered = signal.filtfilt(b, a, x)
+        b, a = signal.butter(5, 3000, 'low', fs=sr)
+        x_filtered = signal.filtfilt(b, a, x)
 
         # Salvar o áudio filtrado
-        #sf.write(audio_path, x_filtered, sr)
+        sf.write(audio_path, x_filtered, sr)
 
         x_filtered = x
 
