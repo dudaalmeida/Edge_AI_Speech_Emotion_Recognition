@@ -34,9 +34,9 @@ bool buttonState = LOW;
 bool lastButtonState = LOW;
 
 // Wi-Fi
-const char* ssid = "NET_2GE9DC82";
-const char* password = "DDE9DC82";
-const char* serverUrl = "http://192.168.0.83:5000/upload";
+const char* ssid = "SSID";
+const char* password = "PASS";
+const char* serverUrl = "http://XXX.XXX.XXX.XXX:5000/upload";
 HTTPClient http;
 
 // Prototipação

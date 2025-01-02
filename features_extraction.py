@@ -24,8 +24,8 @@ def extract_features(data):
     result = np.hstack((result, mel))
 
     # Tonnetz
-    tonnetz = np.mean(librosa.feature.tonnetz(y=data, sr=sr).T, axis=0)
-    result = np.hstack((result, tonnetz))
+    #tonnetz = np.mean(librosa.feature.tonnetz(y=data, sr=sr).T, axis=0)
+    #result = np.hstack((result, tonnetz))
 
     return result
 
