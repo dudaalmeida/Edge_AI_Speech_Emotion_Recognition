@@ -18,8 +18,8 @@ app = Flask(__name__)
 # Pasta para armazenar os fragmentos temporários
 TEMP_FOLDER = "temp_audio/"
 FINAL_AUDIO = "final_audio.wav"
-AUDIO_PATH = "C:/Users/eduarda.almeida/Downloads/VERBO-Dataset/VERBO-Dataset/Audios/Mixed/tri-m4-q1.wav"
-MODEL_PATH = "C:/Users/eduarda.almeida/Desktop/Servidor_Flask_Modelo/model_34.h5"
+#AUDIO_PATH = "C:/Users/eduarda.almeida/Downloads/VERBO-Dataset/VERBO-Dataset/Audios/Mixed/tri-m4-q1.wav"
+MODEL_PATH = "model_34.h5"
 
 if not os.path.exists(TEMP_FOLDER):
     os.makedirs(TEMP_FOLDER)
