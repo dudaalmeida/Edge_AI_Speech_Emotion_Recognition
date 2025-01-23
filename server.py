@@ -30,6 +30,10 @@ classes = ["Alegria", "Desgosto", "Medo", "Neutro", "Raiva", "Surpresa", "Triste
 
 model = load_model(MODEL_PATH)
 
+@app.route('/')
+def home():
+    return "Servidor Flask está funcionando!", 200
+
 @app.route("/infer", methods=["GET"])
 def infer():
     try:
